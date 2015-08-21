@@ -562,20 +562,27 @@ def convert_to_jpeg(directory, quality):
 ########################################################################################################################
 
 
-def calculate_visual_metrics(histograms_file, start, end, perceptual, dirs):
+def calculate_visual_metrics(histograms_file, start, end, perceptual, dirs, do_progress):
     metrics = None
     histograms = load_histograms(histograms_file, start, end)
     if histograms is not None and len(histograms) > 0:
         progress = calculate_visual_progress(histograms)
         if len(histograms) > 1:
+            si = calculate_speed_index(progress)
             metrics = [
                 {'name': 'First Visual Change', 'value': histograms[1]['time']},
                 {'name': 'Last Visual Change', 'value': histograms[-1]['time']},
-                {'name': 'Speed Index', 'value': calculate_speed_index(progress)}
+                {'name': 'Speed Index', 'value': si[0]}
             ]
+            if do_progress:
+                metrics.append({'name': 'Speed Index Progress', 'value': ', '.join(si[1])})
             if perceptual:
+                psi = calculate_perceptual_speed_index(progress, dirs)
                 metrics.append({'name': 'Perceptual Speed Index',
-                                'value': calculate_perceptual_speed_index(progress, dirs)})
+                                'value': psi[0]})
+                if do_progress:
+                    metrics.append({'name': 'Perceptual Speed Index Progress',
+                                    'value': ', '.join(psi[1])})
         else:
             metrics = [
                 {'name': 'First Visual Change', 'value': histograms[0]['time']},
@@ -591,7 +598,6 @@ def calculate_visual_metrics(histograms_file, start, end, perceptual, dirs):
                 prog += ", "
             prog += '{0:d}={1:d}%'.format(p['time'], int(p['progress']))
         metrics.append({'name': 'Visual Progress', 'value': prog})
-
     return metrics
 
 
@@ -670,19 +676,22 @@ def find_visually_complete(progress):
 
 def calculate_speed_index(progress):
     si = 0
+    si_progress = []
     last_ms = progress[0]['time']
     last_progress = progress[0]['progress']
     for p in progress:
         elapsed = p['time'] - last_ms
         si += elapsed * (1.0 - last_progress)
+        si_progress.append('{0:d}={1:d}'.format(p['time'], int(si)))
         last_ms = p['time']
         last_progress = p['progress'] / 100.0
-    return int(si)
+    return (int(si), si_progress)
 
 
 def calculate_perceptual_speed_index(progress, directory):
     from ssim import compute_ssim
     per_si = 0
+    per_si_progress = []
     last_ms = progress[0]['time']
     x = len(progress)
     # Full Path of the Target Frame
@@ -697,8 +706,31 @@ def calculate_perceptual_speed_index(progress, directory):
         # Takes full path of PNG frames to compute SSIM value
         ssim = compute_ssim(current_frame, target_frame)
         per_si += elapsed * (1.0 - ssim)
+        per_si_progress.append('{0:d}={1:d}'.format(p['time'], int(per_si)))
         last_ms = p['time']
-    return int(per_si)
+    return (int(per_si), per_si_progress)
+
+
+def relative_ssim(progress, directory):
+    from ssim import compute_ssim
+    ssims = []
+    last_ms = progress[0]['time']
+    x = len(progress)
+    # Full Path of the Target Frame
+    dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), directory)
+    for p in progress:
+        elapsed = p['time'] - last_ms
+        # Full Path of the Current Frame
+        current_frame = os.path.join(dir, "ms_{0:06d}.png".format(p["time"]))
+        target_frame = os.path.join(dir, "ms_{0:06d}.png".format(progress[x - 1]["time"]))
+        logging.debug("Target image for perSI is %s" % target_frame)
+        logging.debug("Current Image is %s" % current_frame)
+        # Takes full path of PNG frames to compute SSIM value
+        ssim = compute_ssim(current_frame, target_frame)
+        ssims.append(ssim)
+        last_ms = p['time']
+    return ssims
+
 
 
 ########################################################################################################################
@@ -800,6 +832,8 @@ def main():
                                                                  "visual metrics.")
     parser.add_argument('-k', '--perceptual', action='store_true', default=False,
                         help="Calculate perceptual Speed Index")
+    parser.add_argument('-t', '--progress', action='store_true', default=False,
+                        help="Show Progress of SI and perSI over time")
 
     options = parser.parse_args()
 
@@ -849,7 +883,7 @@ def main():
                                 options.timeline)
             calculate_histograms(directory, histogram_file, options.force)
             metrics = calculate_visual_metrics(histogram_file, options.start, options.end, options.perceptual,
-                                               directory)
+                                               directory, options.progress)
             # Perceptual SI computation works on png's only
             if options.dir is not None and options.quality is not None and options.perceptual is False:
                 convert_to_jpeg(directory, options.quality)
