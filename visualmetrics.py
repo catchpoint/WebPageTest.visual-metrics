@@ -816,17 +816,17 @@ def calculate_image_histogram(file):
     histogram = {'r': [0 for i in xrange(256)],
                  'g': [0 for i in xrange(256)],
                  'b': [0 for i in xrange(256)]}
-    try:
-      for y in xrange(height):
-        for x in xrange(width):
+    for y in xrange(height):
+      for x in xrange(width):
+        try:
           pixel = pixels[x, y]
           # Don't include White pixels (with a tiny bit of slop for compression artifacts)
           if pixel[0] < 250 or pixel[1] < 250 or pixel[2] < 250:
             histogram['r'][pixel[0]] += 1
             histogram['g'][pixel[1]] += 1
             histogram['b'][pixel[2]] += 1
-    except:
-      pass
+        except:
+          pass
   except:
     histogram = None
     logging.exception('Error calculating histogram for ' + file)
