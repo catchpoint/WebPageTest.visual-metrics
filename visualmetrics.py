@@ -1288,6 +1288,7 @@ def main():
   parser.add_argument('-c', '--check', action='store_true', default=False,
                       help="Check dependencies (ffmpeg, imagemagick, PIL, SSIM).")
   parser.add_argument('-v', '--verbose', action='count', help="Increase verbosity (specify multiple times for more).")
+  parser.add_argument('--logfile', help="Write log messages to given file instead of stdout")
   parser.add_argument('-i', '--video', help="Input video file.")
   parser.add_argument('-d', '--dir', help="Directory of video frames "
                                           "(as input if exists or as output if a video file is specified).")
@@ -1370,7 +1371,11 @@ def main():
     log_level = logging.INFO
   elif options.verbose >= 4:
     log_level = logging.DEBUG
-  logging.basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d - %(message)s", datefmt="%H:%M:%S")
+  if options.logfile is not None:
+    logging.basicConfig(filename=options.logfile, level=log_level,
+                        format="%(asctime)s.%(msecs)03d - %(message)s", datefmt="%H:%M:%S")
+  else:
+    logging.basicConfig(level=log_level, format="%(asctime)s.%(msecs)03d - %(message)s", datefmt="%H:%M:%S")
 
   if options.multiple:
     options.orange = True

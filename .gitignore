@@ -10,3 +10,6 @@ target/
 *.gz
 
 ios_video.mp4
+/*.mp4
+/*.json
+/*.jpg
