@@ -355,7 +355,7 @@ def trim_video_end(directory, trim_time):
     logging.debug("Trimming " + str(trim_time) + "ms from the end of the video in " + directory)
     frames = sorted(glob.glob(os.path.join(directory, 'video-*.png')))
     if len(frames):
-      match = re.compile('video-(?P<ms>[0-9]+)\.png')
+      match = re.compile(r'video-(?P<ms>[0-9]+)\.png')
       m = re.search(match, frames[-1])
       if m is not None:
         frame_time = int(m.groupdict().get('ms'))
@@ -374,7 +374,7 @@ def adjust_frame_times(directory):
   offset = None
   frames = sorted(glob.glob(os.path.join(directory, 'video-*.png')))
   if len(frames):
-    match = re.compile('video-(?P<ms>[0-9]+)\.png')
+    match = re.compile(r'video-(?P<ms>[0-9]+)\.png')
     for frame in frames:
       m = re.search(match, frame)
       if m is not None:
@@ -643,7 +643,7 @@ def get_decimate_filter():
   try:
     filters = subprocess.check_output(['ffmpeg', '-filters'], stderr=subprocess.STDOUT)
     lines = filters.split("\n")
-    match = re.compile('(?P<filter>[\w]*decimate).*V->V.*Remove near-duplicate frames')
+    match = re.compile(r'(?P<filter>[\w]*decimate).*V->V.*Remove near-duplicate frames')
     for line in lines:
       m = re.search(match, line)
       if m is not None:
@@ -782,7 +782,7 @@ def synchronize_to_timeline(directory, timeline_file):
   offset = get_timeline_offset(timeline_file)
   if offset > 0:
     frames = sorted(glob.glob(os.path.join(directory, 'ms_*.png')))
-    match = re.compile('ms_(?P<ms>[0-9]+)\.png')
+    match = re.compile(r'ms_(?P<ms>[0-9]+)\.png')
     for frame in frames:
       m = re.search(match, frame)
       if m is not None:
@@ -909,7 +909,7 @@ def calculate_histograms(directory, histograms_file, force):
       if extension is not None:
         histograms = []
         frames = sorted(glob.glob(os.path.join(directory, 'ms_*' + extension)))
-        match = re.compile('ms_(?P<ms>[0-9]+)\.')
+        match = re.compile(r'ms_(?P<ms>[0-9]+)\.')
         for frame in frames:
           m = re.search(match, frame)
           if m is not None:
@@ -984,7 +984,7 @@ def save_screenshot(directory, dest, quality):
 def convert_to_jpeg(directory, quality):
   directory = os.path.realpath(directory)
   files = sorted(glob.glob(os.path.join(directory, 'ms_*.png')))
-  match = re.compile('(?P<base>ms_[0-9]+\.)')
+  match = re.compile(r'(?P<base>ms_[0-9]+\.)')
   for file in files:
     m = re.search(match, file)
     if m is not None:
@@ -995,6 +995,58 @@ def convert_to_jpeg(directory, quality):
       subprocess.call(command, shell=True)
       if os.path.isfile(dest):
         os.remove(file)
+
+
+########################################################################################################################
+#   Video rendering
+########################################################################################################################
+
+def render_video(directory, video_file):
+  """Render the frames to the given mp4 file"""
+  directory = os.path.realpath(directory)
+  files = sorted(glob.glob(os.path.join(directory, 'ms_*.png')))
+  if len(files) > 1:
+    current_image = None
+    with open(os.path.join(directory, files[0]), 'rb') as f_in:
+      current_image = f_in.read()
+    if current_image is not None:
+      command = ['ffmpeg', '-f', 'image2pipe', '-vcodec', 'png', '-r', '30', '-i', '-',
+                '-vcodec', 'libx264', '-r', '30', '-crf', '24', '-g', '15',
+                '-preset', 'superfast', '-y', video_file]
+      try:
+        proc = subprocess.Popen(command, stdin=subprocess.PIPE)
+        if proc:
+          match = re.compile(r'ms_([0-9]+)\.')
+          m = re.search(match, files[1])
+          file_index = 0
+          last_index = len(files) - 1
+          if m is not None:
+            next_image_time = int(m.group(1))
+            next_image_file = files[file_index + 1]
+          done = False
+          current_frame = 0
+          while not done:
+            current_frame_time = int(round(float(current_frame) * 1000.0 / 30.0))
+            if current_frame_time >= next_image_time:
+              file_index += 1
+              with open(os.path.join(directory, files[file_index]), 'rb') as f_in:
+                current_image = f_in.read()
+              if file_index < last_index:
+                m = re.search(match, files[file_index + 1])
+                if m:
+                  next_image_time = int(m.group(1))
+                  next_image_file = files[file_index + 1]
+              else:
+                done = True
+            proc.stdin.write(current_image)
+            current_frame += 1
+          # hold the end frame for one second so it's actually visible
+          for i in xrange(30):
+            proc.stdin.write(current_image)
+          proc.stdin.close()
+          proc.communicate()
+      except Exception:
+        pass
 
 
 ########################################################################################################################
@@ -1036,7 +1088,7 @@ def sample_frames(frames, interval, start_ms, skip_frames):
     first_frame = frames[0]
     first_change = frames[1]
     last_frame = frames[-1]
-    match = re.compile('ms_(?P<ms>[0-9]+)\.')
+    match = re.compile(r'ms_(?P<ms>[0-9]+)\.')
     m = re.search(match, first_change)
     first_change_time = 0
     if m is not None:
@@ -1292,6 +1344,7 @@ def main():
   parser.add_argument('-i', '--video', help="Input video file.")
   parser.add_argument('-d', '--dir', help="Directory of video frames "
                                           "(as input if exists or as output if a video file is specified).")
+  parser.add_argument('--render', help="Render the video frames to the given mp4 video file.")
   parser.add_argument('--screenshot', help="Save the last frame of video as an image to the path provided.")
   parser.add_argument('-g', '--histogram', help="Histogram file (as input if exists or as output if "
                                                 "histograms need to be calculated).")
@@ -1400,6 +1453,8 @@ def main():
         video_to_frames(options.video, directory, options.force, orange_file, white_file, options.multiple,
                         options.viewport, options.viewporttime, options.full, options.timeline, options.trimend)
       if not options.multiple:
+        if options.render is not None:
+          render_video(directory, options.render)
         # Calculate the histograms and visual metrics
         calculate_histograms(directory, histogram_file, options.force)
         metrics = calculate_visual_metrics(histogram_file, options.start, options.end, options.perceptual,
