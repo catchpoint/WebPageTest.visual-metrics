@@ -570,7 +570,7 @@ def find_render_start(directory, orange_file, gray_file):
                         logging.debug('Removing gray frame %s', files[i])
                         os.remove(files[i])
                     else:
-                        break
+                        continue
     except BaseException:
         logging.exception('Error getting render start')
 
