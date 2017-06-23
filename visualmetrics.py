@@ -83,24 +83,8 @@ def video_to_frames(video, directory, force, orange_file, white_file, gray_file,
                         directories = [directory]
                     for dir in directories:
                         trim_video_end(dir, trim_end)
-                        if orange_file is not None:
-                            remove_frames_before_orange(dir, orange_file)
-                            remove_orange_frames(dir, orange_file)
-                        find_first_frame(dir, white_file)
-                        find_render_start(dir, orange_file, gray_file)
-                        find_last_frame(dir, white_file)
-                        adjust_frame_times(dir)
-                        if timeline_file is not None and not multiple:
-                            synchronize_to_timeline(dir, timeline_file)
-                        eliminate_duplicate_frames(dir)
-                        eliminate_similar_frames(dir)
-                        blank_first_frame(dir)
-                        # See if we are limiting the number of frames to keep
-                        # (before processing them to save processing time)
-                        if options.maxframes > 0:
-                            cap_frame_count(dir, options.maxframes)
-                        crop_viewport(dir)
-                        gc.collect()
+                        prune_directory(dir, orange_file, white_file,
+                                        gray_file, timeline_file, multiple)
                 else:
                     logging.critical("Error extracting the video frames from %s", video)
             else:
@@ -109,6 +93,36 @@ def video_to_frames(video, directory, force, orange_file, white_file, gray_file,
             logging.critical("Input video file %s does not exist", video)
     else:
         logging.info("Extracted video already exists in %s", directory)
+
+
+def prune_directory(directory, orange_file, white_file, gray_file, timeline_file, multiple):
+    '''Remove duplicates, similar, and modify screenshots as needed.'''
+    global options
+
+    if orange_file is not None:
+        remove_frames_before_orange(directory, orange_file)
+        remove_orange_frames(directory, orange_file)
+
+    find_first_frame(directory, white_file)
+    find_render_start(directory, orange_file, gray_file)
+    find_last_frame(directory, white_file)
+
+    adjust_frame_times(directory)
+
+    if timeline_file is not None and not multiple:
+        synchronize_to_timeline(directory, timeline_file)
+
+    eliminate_duplicate_frames(directory)
+    eliminate_similar_frames(directory)
+    blank_first_frame(directory)
+
+    # See if we are limiting the number of frames to keep
+    # (before processing them to save processing time)
+    if options.maxframes > 0:
+        cap_frame_count(dir, options.maxframes)
+
+    crop_viewport(directory)
+    gc.collect()
 
 
 def extract_frames(video, directory, full_resolution, viewport):
@@ -1630,32 +1644,37 @@ def main():
     try:
         if not options.check:
             viewport = None
+            orange_file = None
+            if options.orange:
+                orange_file = os.path.join(os.path.dirname(
+                    os.path.realpath(__file__)), 'orange.png')
+                if not os.path.isfile(orange_file):
+                    orange_file = os.path.join(temp_dir, 'orange.png')
+                    generate_orange_png(orange_file)
+            white_file = None
+            if options.white or options.startwhite or options.endwhite:
+                white_file = os.path.join(os.path.dirname(
+                    os.path.realpath(__file__)), 'white.png')
+                if not os.path.isfile(white_file):
+                    white_file = os.path.join(temp_dir, 'white.png')
+                    generate_white_png(white_file)
+            gray_file = None
+            if options.gray:
+                gray_file = os.path.join(os.path.dirname(
+                    os.path.realpath(__file__)), 'gray.png')
+                if not os.path.isfile(gray_file):
+                    gray_file = os.path.join(temp_dir, 'gray.png')
+                    generate_gray_png(gray_file)
+
             if options.video:
-                orange_file = None
-                if options.orange:
-                    orange_file = os.path.join(os.path.dirname(
-                        os.path.realpath(__file__)), 'orange.png')
-                    if not os.path.isfile(orange_file):
-                        orange_file = os.path.join(temp_dir, 'orange.png')
-                        generate_orange_png(orange_file)
-                white_file = None
-                if options.white or options.startwhite or options.endwhite:
-                    white_file = os.path.join(os.path.dirname(
-                        os.path.realpath(__file__)), 'white.png')
-                    if not os.path.isfile(white_file):
-                        white_file = os.path.join(temp_dir, 'white.png')
-                        generate_white_png(white_file)
-                gray_file = None
-                if options.gray:
-                    gray_file = os.path.join(os.path.dirname(
-                        os.path.realpath(__file__)), 'gray.png')
-                    if not os.path.isfile(gray_file):
-                        gray_file = os.path.join(temp_dir, 'gray.png')
-                        generate_gray_png(gray_file)
                 video_to_frames(options.video, directory, options.force, orange_file,
                                 white_file, gray_file, options.multiple, options.viewport,
                                 options.viewporttime, options.full, options.timeline,
                                 options.trimend)
+            else:
+                prune_directory(directory, orange_file, white_file, gray_file,
+                                options.timeline, options.multiple)
+
             if not options.multiple:
                 if options.render is not None:
                     render_video(directory, options.render)
