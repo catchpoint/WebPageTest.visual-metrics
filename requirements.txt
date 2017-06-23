@@ -1,0 +1,5 @@
+pillow == 4.1.1
+numpy == 1.13.0
+scipy == 0.19.0
+argparse == 1.4.0
+pyssim == 0.3
