@@ -596,7 +596,7 @@ def eliminate_duplicate_frames(directory):
             # Figure out the region of the image that we care about
             top = 8
             right_margin = 8
-            bottom_margin = 10
+            bottom_margin = 20
             if height > 400 or width > 400:
                 top = int(math.ceil(float(height) * 0.04))
                 right_margin = int(math.ceil(float(width) * 0.04))
@@ -1314,11 +1314,13 @@ def calculate_visual_metrics(histograms_file, start, end, perceptual, dirs, prog
                 metrics.append({'name': 'Perceptual Speed Index',
                                 'value': calculate_perceptual_speed_index(progress, dirs)})
             if hero_elements_file is not None and os.path.isfile(hero_elements_file):
+                logging.debug('Calculating hero element times')
                 hero_data = None
                 hero_f_in = gzip.open(hero_elements_file, 'rb')
                 try:
                     hero_data = json.load(hero_f_in)
                 except Exception as e:
+                    logging.exception('Could not load hero elements data')
                     logging.exception(e)
                 hero_f_in.close()
 
@@ -1340,6 +1342,8 @@ def calculate_visual_metrics(histograms_file, start, end, perceptual, dirs, prog
                     hero_f_out = gzip.open(hero_elements_file, 'wb', 7)
                     json.dump(hero_data, hero_f_out)
                     hero_f_out.close()
+            else:
+                logging.warn('Hero elements file is not valid: ' + str(hero_elements_file))
         else:
             metrics = [
                 {'name': 'First Visual Change',
@@ -1488,6 +1492,10 @@ def calculate_hero_time(progress, directory, hero, viewport):
     elif os.path.isfile(target_frame + '.jpg'):
         extension = '.jpg'
     if extension is not None:
+        hero_width = int(hero['width'])
+        hero_height = int(hero['height'])
+        hero_x = int(hero['x'])
+        hero_y = int(hero['y'])
         target_frame = target_frame + extension
         logging.debug('Target image for hero %s is %s' % (hero['name'], target_frame))
 
@@ -1535,7 +1543,7 @@ def calculate_hero_time(progress, directory, hero, viewport):
                     image_magick['convert'], current_frame + extension, hero_mask, current_mask)
                 logging.debug(command)
                 subprocess.call(command, shell=True)
-                match = frames_match(target_mask, current_mask, 2, 0, None, None)
+                match = frames_match(target_mask, current_mask, 5, 0, None, None)
                 # Remove each mask after using it
                 os.remove(current_mask)
 
