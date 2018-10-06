@@ -598,9 +598,9 @@ def eliminate_duplicate_frames(directory):
             right_margin = 8
             bottom_margin = 20
             if height > 400 or width > 400:
-                top = int(math.ceil(float(height) * 0.04))
-                right_margin = int(math.ceil(float(width) * 0.04))
-                bottom_margin = int(math.ceil(float(width) * 0.04))
+                top = max(top, int(math.ceil(float(height) * 0.04)))
+                right_margin = max( right_margin, int(math.ceil(float(width) * 0.04)))
+                bottom_margin = max(bottom_margin, int(math.ceil(float(width) * 0.04)))
             height = max(height - top - bottom_margin, 1)
             left = 0
             width = max(width - right_margin, 1)
