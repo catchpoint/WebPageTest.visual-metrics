@@ -564,7 +564,7 @@ def find_render_start(directory, orange_file, gray_file):
                 crop = '{0:d}x{1:d}+{2:d}+{3:d}'.format(
                     width, height, left, top)
                 for i in xrange(1, count):
-                    if frames_match(first, files[i], 10, 500, crop, mask):
+                    if frames_match(first, files[i], 10, 0, crop, mask):
                         logging.debug('Removing pre-render frame %s', files[i])
                         os.remove(files[i])
                     elif orange_file is not None and is_color_frame(files[i], orange_file):
@@ -598,9 +598,9 @@ def eliminate_duplicate_frames(directory):
             right_margin = 8
             bottom_margin = 20
             if height > 400 or width > 400:
-                top = max(top, int(math.ceil(float(height) * 0.04)))
-                right_margin = max( right_margin, int(math.ceil(float(width) * 0.04)))
-                bottom_margin = max(bottom_margin, int(math.ceil(float(width) * 0.04)))
+                top = int(math.ceil(float(height) * 0.04))
+                right_margin = int(math.ceil(float(width) * 0.04))
+                bottom_margin = int(math.ceil(float(width) * 0.04))
             height = max(height - top - bottom_margin, 1)
             left = 0
             width = max(width - right_margin, 1)
@@ -1529,6 +1529,12 @@ def calculate_hero_time(progress, directory, hero, viewport):
             if os.path.isfile(target_mask):
                 os.remove(target_mask)
 
+        # Allow for small differences like scrollbars and overlaid UI elements
+        # by applying a 10% fuzz and allowing for up to 2% of the pixels to be
+        # different.
+        fuzz = 10
+        max_pixel_diff = math.ceil(hero_width * hero_height * 0.02)
+
         for p in progress:
             current_frame = os.path.join(dir, 'ms_{0:06d}'.format(p['time']))
             extension = None
@@ -1543,7 +1549,7 @@ def calculate_hero_time(progress, directory, hero, viewport):
                     image_magick['convert'], current_frame + extension, hero_mask, current_mask)
                 logging.debug(command)
                 subprocess.call(command, shell=True)
-                match = frames_match(target_mask, current_mask, 5, 0, None, None)
+                match = frames_match(target_mask, current_mask, fuzz, max_pixel_diff, None, None)
                 # Remove each mask after using it
                 os.remove(current_mask)
 
