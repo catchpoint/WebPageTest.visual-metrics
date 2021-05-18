@@ -1785,13 +1785,14 @@ def main():
 
     # Set up logging
     log_level = logging.CRITICAL
-    if options.verbose == 1:
+    verboseValue = int(0 if options.verbose is None else options.verbose)
+    if verboseValue == 1:
         log_level = logging.ERROR
-    elif options.verbose == 2:
+    elif verboseValue == 2:
         log_level = logging.WARNING
-    elif options.verbose == 3:
+    elif verboseValue == 3:
         log_level = logging.INFO
-    elif options.verbose >= 4:
+    elif verboseValue >= 4:
         log_level = logging.DEBUG
     if options.logfile is not None:
         logging.basicConfig(filename=options.logfile, level=log_level,
