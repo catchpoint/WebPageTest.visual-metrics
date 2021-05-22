@@ -141,9 +141,9 @@ def extract_frames(video, directory, full_resolution, viewport):
                    os.path.join(dir_escaped, 'img-%d.png')]
         logging.debug(' '.join(command))
         lines = []
-        proc = subprocess.Popen(command, stderr=subprocess.PIPE)
+        proc = subprocess.Popen(command, stderr=subprocess.PIPE, universal_newlines=True)
         while proc.poll() is None:
-            lines.extend(iter(proc.stderr.readline, ""))
+            lines.append(proc.stderr.readline())
 
         pattern = re.compile(r'keep pts:[0-9]+ pts_time:(?P<timecode>[0-9\.]+)')
         frame_count = 0
@@ -811,7 +811,7 @@ def is_color_frame(file, color_file):
                            ' miff:- | {4} -metric AE - -fuzz 15% null:'
                           ).format(image_magick['convert'], color_file, file, crop,
                                    image_magick['compare'])
-                compare = subprocess.Popen(command, stderr=subprocess.PIPE, shell=True)
+                compare = subprocess.Popen(command, stderr=subprocess.PIPE, shell=True, universal_newlines=True)
                 _, err = compare.communicate()
                 if re.match('^[0-9]+$', err):
                     different_pixels = int(err)
