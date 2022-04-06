@@ -54,6 +54,171 @@ image_magick = {'convert': 'convert', 'compare': 'compare', 'mogrify': 'mogrify'
 frame_cache = {}
 
 # #################################################################################################
+# Replacement methods for ImageMagick to Python conversion
+# #################################################################################################
+
+
+def compare(img1, img2, fuzz=0.10):
+    """Calculate the Absolute Error count between given images."""
+    try:
+        import numpy as np
+
+        img1_data = np.array(img1)
+        img2_data = np.array(img2)
+
+        inds = np.argwhere(
+            np.isclose(img1_data[:, :, 0], img2_data[:, :, 0], atol=fuzz * 255)
+            & np.isclose(img1_data[:, :, 1], img2_data[:, :, 1], atol=fuzz * 255)
+            & np.isclose(img1_data[:, :, 2], img2_data[:, :, 2], atol=fuzz * 255)
+        )
+
+        return (img1_data.shape[0] * img1_data.shape[1]) - len(inds)
+    except BaseException as e:
+        logging.exception(e)
+        return None
+
+
+def crop_im(img, crop_x, crop_y, crop_x_offset, crop_y_offset, gravity=None):
+    """Crop an image.
+
+    If gravity is equal to "center", the crop region will
+    first be centered before applying the crop.
+    """
+    try:
+        import numpy as np
+        from PIL import Image
+
+        img = np.array(img)
+
+        base_x = 0
+        base_y = 0
+
+        height, width, _ = img.shape
+        if gravity == "center":
+            base_x = width // 2
+            base_y = height // 2
+
+            base_x -= crop_x // 2
+            base_y -= crop_y // 2
+
+        base_x += crop_x_offset
+        base_y += crop_y_offset
+
+        return Image.fromarray(
+            img[base_y : base_y + crop_y, base_x : base_x + crop_x, :]
+        )
+    except BaseException as e:
+        logging.exception(e)
+        return None
+
+
+def resize(img, width, height):
+    """Resize an image to the given width, and height."""
+
+    try:
+        from PIL import Image
+
+        try:
+            # If it's a numpy array, convert it first
+            img = Image.fromarray(img)
+        except:
+            pass
+
+        return img.resize((width, height), resample=Image.LANCZOS)
+    except BaseException as e:
+        logging.exception(e)
+        return None
+
+
+def scale(img, maxsize):
+    """Scale an image to the given max size."""
+    width, height = img.size
+    ratio = min(float(maxsize) / width, float(maxsize) / height)
+    return resize(img, int(width * ratio), int(height * ratio))
+
+
+def mask(
+    img, x_mask, y_mask, x_offset, y_offset, color=(255, 255, 255), insert_img=None
+):
+    """Mask an image.
+
+    If insert_img is provided, the image given will mask the region
+    specified. Otherwise, by default, the region specified will be covered
+    in white - change color to change the mask color.
+    """
+    try:
+        import numpy as np
+        from PIL import Image
+
+        img_data = np.array(img)
+        if insert_img is not None:
+            insert_img_data = np.array(insert_img)
+            img_data[
+                y_offset : y_offset + y_mask, x_offset : x_offset + x_mask, :
+            ] = insert_img
+        else:
+            img_data[
+                y_offset : y_offset + y_mask, x_offset : x_offset + x_mask, :
+            ] = color
+
+        return Image.fromarray(img_data)
+    except BaseException as e:
+        logging.exception(e)
+        return None
+
+
+def blank_frame(file, color="white"):
+    """Return a new blank frame that has the same dimensions as file."""
+    try:
+        from PIL import Image
+
+        with Image.open(file) as im:
+            width, height = im.size
+        return Image.new("RGB", (width, height), color=color)
+    except BaseException as e:
+        logging.exception(e)
+        return None
+
+
+def convert_to_srgb(img):
+    """Convert PIL image to sRGB color space (if possible)"""
+    try:
+        import io
+        from PIL import Image, ImageCms
+
+        icc = img.info.get("icc_profile", "")
+
+        if icc:
+            return ImageCms.profileToProfile(
+                img,
+                ImageCms.ImageCmsProfile(io.BytesIO(icc)),
+                ImageCms.createProfile("sRGB"),
+            )
+
+        logging.debug(
+            "Unable to convert image to sRGB as there is no color "
+            "profile to transform from."
+        )
+        return img
+    except BaseException as e:
+        logging.exception(e)
+        return None
+
+
+def convert_img_to_jpeg(src, dest, quality=30):
+    """Convert an image to a JPEG with the given quality."""
+    try:
+        from PIL import Image
+
+        with Image.open(src) as img:
+            img = convert_to_srgb(img)
+            img.save(dest, quality=quality)
+    except BaseException as e:
+        logging.exception(e)
+        return
+
+
+# #################################################################################################
 # Frame Extraction and de-duplication
 # #################################################################################################
 
